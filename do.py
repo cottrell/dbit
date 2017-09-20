@@ -1,4 +1,5 @@
 import datetime
+import glob
 import json
 import time
 import random
@@ -41,6 +42,15 @@ def snapshot():
         summary[k] = client.getsummary(k)
     return dict(curr=curr, instr=instr, orderbook=orderbook, lasttrades=lasttrades, summary=summary)
 
+def take_snapshot_write_file():
+    d = snapshot()
+    filename = os.path.join(_data_dir, 'snapshot_{}.json'.format(datetime.datetime.today().isoformat()))
+    print('writing {}'.format(filename))
+    json.dump(d, open(filename, 'w'))
+    cmd = 'gzip {}'.format(filename)
+    print(cmd)
+    os.system(cmd)
+
 def run(stop_condition, mean_period=60):
     if not os.path.exists(_data_dir):
         os.makedirs(_data_dir)
@@ -48,15 +58,44 @@ def run(stop_condition, mean_period=60):
     while not stop_condition(i):
         print('i={}'.format(i))
         i = i + 1
-        d = snapshot()
-        filename = os.path.join(_data_dir, 'snapshot_{}.json'.format(datetime.datetime.today().isoformat()))
-        print('writing {}'.format(filename))
-        json.dump(d, open(filename, 'w'))
+        take_snapshot_write_file()
         wait = random.random() * mean_period * 2
         print('sleeping {} seconds'.format(wait))
         time.sleep(wait)
 
-run(lambda i: i > 1000)
+class Data():
+    """
+    Processing the json snapshots. There are the following records in snapshot: ['curr', 'instr', 'orderbook', 'lasttrades', 'summary']
+
+        Each of these are per-instrument records.
+        summary: can be flattened, only need to parse strike and maturity from instrumentName. This should be starting point.
+        orderbook:
+        lasttrades:
+    """
+    def __init__(self):
+        filename = os.path.join(_data_dir, 'snapshot_*.json')
+        self.filenames = glob.glob(filename) + glob.glob(filename + '.gz')
+        self.data = None
+    def load(self):
+        d = list()
+        for f in self.filenames:
+            print('reading {}'.format(f))
+            opener = open
+            if f.endswith('.gz'):
+                opener = gzip.open
+            d.append(json.load(opener(f)))
+        self.data = d
+    def __repr__(self):
+        out = ['{} entries:'.format(len(self.filenames))]
+        if self.data is not None:
+            for k in self.data[0]:
+                out += ['{} {} entries '.format(k, len(self.data[0][k]))]
+        return '\n'.join(out)
+
+
+data = Data()
+
+# run(lambda i: i > 1000)
 
 # globals().update(snapshot())
 
