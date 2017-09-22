@@ -1,7 +1,8 @@
 from functools import lru_cache
 import json
 import deribit_api as da
-cred = json.load(open('/Users/davidcottrell/.cred/deribit/deribit.json'))
+import os
+cred = json.load(open(os.path.abspath('~/.cred/deribit/deribit.json')))
 # url = 'https://test.deribit.com'
 url = 'https://www.deribit.com'
 client = da.RestClient(cred['access_key'], cred['access_secret'], url=url)
