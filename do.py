@@ -1,4 +1,5 @@
 import datetime
+import pandas as pd
 import glob
 import json
 import time
@@ -63,12 +64,21 @@ def run(stop_condition, mean_period=60):
         print('sleeping {} seconds'.format(wait))
         time.sleep(wait)
 
+def transform_snapshot(d):
+    instr = d['instr']
+    # imap = {x['instrumentName']: x for x in instr}
+    imap = pd.DataFrame(instr).set_index('instrumentName')
+    summary = pd.DataFrame(d['summary']).T
+    summary.index.names = ['instrumentName'] # do not need, is in data already
+    df = summary.join(imap)
+    return locals()
+
 class Data():
     """
     Processing the json snapshots. There are the following records in snapshot: ['curr', 'instr', 'orderbook', 'lasttrades', 'summary']
 
         Each of these are per-instrument records.
-        summary: can be flattened, only need to parse strike and maturity from instrumentName. This should be starting point.
+        summary: can be flattened, only need to lookup strike and maturity from instr. This should be starting point.
         orderbook:
         lasttrades:
     """
