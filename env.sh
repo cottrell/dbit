@@ -1,13 +1,12 @@
 #!/bin/bash
+source activate airflow
 export DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 export AIRFLOW_HOME=$DIR
+export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 
 # https://stackoverflow.com/questions/9090683/supervisord-stopping-child-processes
 trap "kill -- -$$" EXIT
 
-# https://issues.apache.org/jira/browse/AIRFLOW-1102
-# pip uninstall -y gunicorn
-# pip install gunicorn==19.3.0
 if [[ "$1" = start ]]; then
     echo starting
     if [[ ! -e "$DIR/.airflow.initdb.touch" ]]; then
