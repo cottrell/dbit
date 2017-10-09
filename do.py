@@ -1,4 +1,5 @@
 import datetime
+import numpy as np
 import pandas as pd
 import glob
 import json
@@ -64,14 +65,47 @@ def run(stop_condition, mean_period=60):
         print('sleeping {} seconds'.format(wait))
         time.sleep(wait)
 
-def transform_snapshot(d):
-    instr = d['instr']
-    # imap = {x['instrumentName']: x for x in instr}
-    imap = pd.DataFrame(instr).set_index('instrumentName')
+def _to_date(x):
+    return datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S GMT')
+
+# do something simple for now
+def transform_summary(d):
+    imap = pd.DataFrame(d['instr']).set_index('instrumentName')
+    imap = imap.drop('created', axis=1)
     summary = pd.DataFrame(d['summary']).T
-    summary.index.names = ['instrumentName'] # do not need, is in data already
+    # summary.index.names = ['instrumentName'] # do not need, is in data already
     df = summary.join(imap)
-    return locals()
+    df['maturity_days'] = df.expiration.map(_to_date)
+    # - datetime.datetime.today()
+    df['created'] = df.created.map(_to_date)
+    for k in f_cols:
+        df[k] = df[k].replace('', np.nan).astype(float)
+    df['strike'] = df.strike.astype(float)
+    return df
+
+f_cols = [
+ 'askPrice',
+ 'bidPrice',
+ 'estDelPrice',
+ 'high',
+ 'last',
+ 'low',
+ 'markPrice',
+ 'midPrice',
+ 'openInterest',
+ 'volume',
+ 'volumeBtc', # redundant with volume?
+ # 'created', # ignore diff in created for now
+ # 'maturity_days']
+ ]
+
+c_cols = [
+ # 'instrumentName',
+ 'kind',
+ 'optionType',
+ 'strike'
+ 'settlement',
+ ]
 
 class Data():
     """
@@ -86,9 +120,12 @@ class Data():
         filename = os.path.join(_data_dir, 'snapshot_*.json')
         self.filenames = glob.glob(filename) + glob.glob(filename + '.gz')
         self.data = None
-    def load(self):
+    def load(self, n_files=None):
         d = list()
-        for f in self.filenames:
+        filenames = self.filenames
+        if n_files is not None:
+            filenames = filenames[-n_files:]
+        for f in filenames:
             print('reading {}'.format(f))
             opener = open
             if f.endswith('.gz'):
