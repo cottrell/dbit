@@ -75,37 +75,51 @@ def transform_summary(d):
     summary = pd.DataFrame(d['summary']).T
     # summary.index.names = ['instrumentName'] # do not need, is in data already
     df = summary.join(imap)
-    df['maturity_days'] = df.expiration.map(_to_date)
+    df['expiration'] = df.expiration.map(_to_date)
+    df['maturity_days'] = df.expiration.dt.day
     # - datetime.datetime.today()
+    f_cols = [
+     'askPrice',
+     'bidPrice',
+     'estDelPrice',
+     'high',
+     'last',
+     'low',
+     'markPrice',
+     'midPrice',
+     'openInterest',
+     'volume',
+     # 'volumeBtc', # redundant with volume?
+     'strike',
+     # 'created', # ignore diff in created for now
+     'maturity_days'
+     ]
+    c_cols = [
+     # 'instrumentName',
+     'kind',
+     'optionType',
+     'settlement',
+     ]
     df['created'] = df.created.map(_to_date)
     for k in f_cols:
         df[k] = df[k].replace('', np.nan).astype(float)
     df['strike'] = df.strike.astype(float)
     return df
 
-f_cols = [
- 'askPrice',
- 'bidPrice',
- 'estDelPrice',
- 'high',
- 'last',
- 'low',
- 'markPrice',
- 'midPrice',
- 'openInterest',
- 'volume',
- 'volumeBtc', # redundant with volume?
- # 'created', # ignore diff in created for now
- # 'maturity_days']
- ]
-
-c_cols = [
- # 'instrumentName',
- 'kind',
- 'optionType',
- 'strike'
- 'settlement',
- ]
+def transform_orderbook(d, simple=True):
+    # only deal with bid and asks
+    orderbook = d['orderbook']
+    if simple:
+        out = list()
+        for k, v in orderbook.items():
+            for x in v['asks'][::-1]:
+                out.append([k, -x['cm'], x['price']])
+            for x in v['bids']:
+                out.append([k, x['cm'], x['price']])
+        out = pd.DataFrame(out, columns=['instrumentName', 'cm', 'price']).set_index('instrumentName')
+    else:
+        imap = pd.DataFrame(d['instr']).set_index('instrumentName')
+    return out
 
 class Data():
     """
