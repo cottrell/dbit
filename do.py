@@ -39,7 +39,7 @@ def snapshot():
     summary = dict()
     for i, k in enumerate(instrumentNames):
         print('request {}: getting orderbook, summary and lasttrades for {}'.format(i, k))
-        orderbook[k] = client.getorderbook(k)
+        orderbook[k] = client.getorderbook(k) # depth optional
         lasttrades[k] = client.getlasttrades(k)
         summary[k] = client.getsummary(k)
     return dict(curr=curr, instr=instr, orderbook=orderbook, lasttrades=lasttrades, summary=summary)
@@ -69,7 +69,8 @@ def _to_date(x):
     return datetime.datetime.strptime(x, '%Y-%m-%d %H:%M:%S GMT')
 
 # do something simple for now
-def transform_summary(d):
+def transform_summary(snapshot):
+    d = snapshot
     imap = pd.DataFrame(d['instr']).set_index('instrumentName')
     imap = imap.drop('created', axis=1)
     summary = pd.DataFrame(d['summary']).T
@@ -106,20 +107,80 @@ def transform_summary(d):
     df['strike'] = df.strike.astype(float)
     return df
 
-def transform_orderbook(d, simple=True):
+def transform_orderbook(snapshot, method='simple', gridsize=100):
+    d = snapshot
     # only deal with bid and asks
     orderbook = d['orderbook']
-    if simple:
+    if method == 'simple':
         out = list()
         for k, v in orderbook.items():
+            tstamp = v['tstamp']
             for x in v['asks'][::-1]:
-                out.append([k, -x['cm'], x['price']])
+                out.append([k, tstamp, False, x['cm'], x['price']])
             for x in v['bids']:
-                out.append([k, x['cm'], x['price']])
-        out = pd.DataFrame(out, columns=['instrumentName', 'cm', 'price']).set_index('instrumentName')
+                out.append([k, tstamp, True, x['cm'], x['price']])
+        out = pd.DataFrame(out, columns=['instrumentName', 'tstamp', 'bid', 'cm', 'price']).set_index('instrumentName')
+        return out
+    elif method == 'piecewise_mean':
+        imap = {x['instrumentName']: x for x in d['instr']}
+        for k, v in orderbook.items():
+            orderbook[k]['f_ask'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['asks']) if v['asks'] else None
+            orderbook[k]['f_bid'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['bids']) if v['bids'] else None
+            orderbook[k].update(imap[k]) # jam everything in
+        return orderbook
     else:
+        raise Exception('not implemented ... ')
         imap = pd.DataFrame(d['instr']).set_index('instrumentName')
-    return out
+        pricePrecision = imap['pricePrecision']
+        # typically precisions is 2 for futures and 4 for options. price range for asks or bids is < 30 for futures and < 1 for options.
+        # do mean price vs qty
+
+def plot_snapshot_orders(snapshot):
+    d = transform_orderbook(snapshot, method='piecewise_mean')
+    from matplotlib.pyplot import plot, show, clf, figure, ion
+    ion()
+    fa = figure(1)
+    fa.clf()
+    ga = fa.gca()
+    fb = figure(2)
+    gb = fb.gca()
+    from pylab import linspace
+    for k, v in d.items():
+        if v['kind'] == 'option':
+            g = ga
+            # TODO calc max ranges for option and futures dynamically in transform orderbook
+            x = linspace(0, 100)
+        else:
+            g = gb
+            x = linspace(0, 1000)
+        f = v['f_ask']
+        if f is not None:
+            g.plot(x, f(x), 'r-', alpha=0.5)
+        f = v['f_bid']
+        if f is not None:
+            g.plot(-x, f(x), 'b-', alpha=0.5)
+
+
+from scipy.interpolate import PPoly
+def _get_piecewise_mean_price_vs_size_from_orderbook_entry(orders):
+    """ orders is just asks or just orders """
+    cm = [0] + [x['cm'] for x in orders]
+    # integral (price times qty) d_qty / qty
+    # represent this as integral of piecewise polynomial with coeff [0, price]
+    price = np.zeros((2, len(cm)-1))
+    price[1,:] = [x['price'] for x in orders]
+    f = PPoly(price, cm, extrapolate=False)
+    F = f.antiderivative()
+    return lambda x: F(x) / x
+
+def _check_ranges(df):
+    g = df[df.cm > 0].groupby(level='instrumentName').price
+    a = g.max() - g.min()
+    a = a.sort_values().tail()
+    g = df[df.cm < 0].groupby(level='instrumentName').price
+    b = g.max() - g.min()
+    b = b.sort_values().tail()
+    return {'bids': a, 'asks': b}
 
 class Data():
     """
