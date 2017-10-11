@@ -123,11 +123,19 @@ def transform_orderbook(snapshot, method='simple', gridsize=100):
         return out
     elif method == 'piecewise_mean':
         imap = {x['instrumentName']: x for x in d['instr']}
+        max_qty = dict(option=0, future=0)
         for k, v in orderbook.items():
-            orderbook[k]['f_ask'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['asks']) if v['asks'] else None
-            orderbook[k]['f_bid'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['bids']) if v['bids'] else None
+            orderbook[k]['f_ask'] = None
+            kind = imap[k]['kind']
+            if v['asks']:
+                orderbook[k]['f_ask'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['asks'])
+                max_qty[kind] = max(max_qty[kind], max([x['quantity'] for x in v['asks']]))
+            orderbook[k]['f_bid'] = None
+            if v['bids']:
+                orderbook[k]['f_bid'] = _get_piecewise_mean_price_vs_size_from_orderbook_entry(v['bids']) if v['bids'] else None
+                max_qty[kind] = max(max_qty[kind], max([x['quantity'] for x in v['bids']]))
             orderbook[k].update(imap[k]) # jam everything in
-        return orderbook
+        return orderbook, max_qty
     else:
         raise Exception('not implemented ... ')
         imap = pd.DataFrame(d['instr']).set_index('instrumentName')
@@ -136,7 +144,7 @@ def transform_orderbook(snapshot, method='simple', gridsize=100):
         # do mean price vs qty
 
 def plot_snapshot_orders(snapshot):
-    d = transform_orderbook(snapshot, method='piecewise_mean')
+    d, max_qty = transform_orderbook(snapshot, method='piecewise_mean')
     from matplotlib.pyplot import plot, show, clf, figure, ion
     ion()
     fa = figure(1)
@@ -149,10 +157,10 @@ def plot_snapshot_orders(snapshot):
         if v['kind'] == 'option':
             g = ga
             # TODO calc max ranges for option and futures dynamically in transform orderbook
-            x = linspace(0, 100)
+            x = linspace(0, max_qty['option'])
         else:
             g = gb
-            x = linspace(0, 1000)
+            x = linspace(0, max_qty['future'])
         f = v['f_ask']
         if f is not None:
             g.plot(x, f(x), 'r-', alpha=0.5)
