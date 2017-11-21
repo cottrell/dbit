@@ -11,14 +11,25 @@ getinstruments = lru_cache()(client.getinstruments)
 getcurrencies = lru_cache()(client.getcurrencies)
 
 import websocket
-from kafka import KafkaProducer
-# producer = KafkaProducer(bootstrap_servers='localhost:1234')
+from kafka import KafkaProducer, KafkaConsumer, TopicPartition
+# producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+topic = 'dbitsub'
+consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
+
+def kafka_consume():
+    for msg in consumer:
+        print(msg.topic, msg.timestamp, msg.offset, msg.partition) # msg.value
+
+def howtogetoffsetsmaybe():
+    t = datetime.datetime.today() - datetime.timedelta(days=0.5)
+    consumer.partitions_for_topic('dbitsub')
+    tp = TopicPartition('dbitsub', 0)
+    consumer.offsets_for_times({tp: t.timestamp() * 1000})
 
 def websocket_to_kafka():
     def on_message(ws, message):
         print('sending {}'.format(len(message)))
-        topic = 'dbitsub'
         producer.send(topic, message)
 
     def on_error(ws, error):
@@ -52,8 +63,12 @@ def websocket_to_kafka():
 def test_kafka():
     producer = KafkaProducer(bootstrap_servers='localhost:1234')
 
+a = None
+
 def test_websocket():
     def on_message(ws, message):
+        global a
+        a = message
         print(message)
 
     def on_error(ws, error):
