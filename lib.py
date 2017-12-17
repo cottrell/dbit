@@ -11,11 +11,15 @@ getinstruments = lru_cache()(client.getinstruments)
 getcurrencies = lru_cache()(client.getcurrencies)
 
 import websocket
+# pip install websocket-client # not websocket
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 # producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
-topic = 'dbitsub'
-consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
+try:
+    producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+    topic = 'dbitsub'
+    consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
+except Exception as e:
+    print(e)
 
 def kafka_consume():
     for msg in consumer:
@@ -65,7 +69,7 @@ def test_kafka():
 
 a = None
 
-def test_websocket():
+def test_websocket(start=False, instrument="all", event="order_book"):
     def on_message(ws, message):
         global a
         a = message
@@ -82,8 +86,8 @@ def test_websocket():
             "id": 5533,
             "action": "/api/v1/private/subscribe",
             "arguments": {
-                "instrument": ["all"],
-                "event": ["order_book"]
+                "instrument": [instrument],
+                "event": [event]
             }
         }
         data['sig'] = client.generate_signature(data['action'], data['arguments'])
@@ -96,7 +100,8 @@ def test_websocket():
                               on_error = on_error,
                               on_close = on_close)
     ws.on_open = on_open
-    ws.run_forever()
+    if start:
+        ws.run_forever()
     return ws
 
 """
