@@ -1,4 +1,6 @@
 from functools import lru_cache
+import pandas as pd
+import datetime
 import json
 import deribit_api as da
 import os
@@ -10,6 +12,8 @@ client = da.RestClient(cred['access_key'], cred['access_secret'], url=url)
 getinstruments = lru_cache()(client.getinstruments)
 getcurrencies = lru_cache()(client.getcurrencies)
 
+# https://jeqo.github.io/post/2017-01-31-kafka-rewind-consumers-offset/
+
 import websocket
 # pip install websocket-client # not websocket
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
@@ -20,6 +24,60 @@ try:
     consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
 except Exception as e:
     print(e)
+
+from collections import defaultdict
+
+def seekbackminutes(offset_minutes, consumer=consumer):
+    t = datetime.datetime.today() - datetime.timedelta(minutes=offset_minutes)
+    part = consumer.partitions_for_topic('dbitsub')
+    assert len(part) == 1
+    part = part.pop() # take first expect only one
+    tp = TopicPartition('dbitsub', part)
+    offset = consumer.offsets_for_times({tp: t.timestamp() * 1000})
+    print('seeking {} {}'.format(tp, offset[tp]))
+    consumer.seek(tp, offset[tp].offset)
+
+def count_eventtypes(consumer=consumer, offset_minutes=5):
+    d = defaultdict(lambda : 0)
+    # first message should be subscribed message if start from beginning? TODO
+    msg = consumer.__next__()
+    t0 = msg.timestamp
+    for i, msg in enumerate(consumer):
+        x = json.loads(msg.value)
+        if 'message' in x and x['message'] == 'subscribed':
+            t0 = msg.timestamp
+            continue
+        notifications = x['notifications']
+        assert len(notifications) == 1, 'wrong number of notifications'
+        xx = notifications[0]
+        key = xx['message']
+        d[key] += 1
+        if i % 10000 == 0:
+            T = msg.timestamp - t0
+            print(i, T)
+            print(pd.Series(d) / T * 1000)
+
+def count_events(consumer=consumer, offset_minutes=5):
+    d = defaultdict(lambda : 0)
+    # first message should be subscribed message if start from beginning? TODO
+    msg = consumer.__next__()
+    t0 = msg.timestamp
+    for i, msg in enumerate(consumer):
+        x = json.loads(msg.value)
+        if 'message' in x and x['message'] == 'subscribed':
+            t0 = msg.timestamp
+            continue
+        notifications = x['notifications']
+        assert len(notifications) == 1, 'wrong number of notifications'
+        xx = notifications[0]
+        key = (xx['message'], xx['result']['instrument'])
+        d[key] += 1
+        if i % 10000 == 0:
+            T = msg.timestamp - t0
+            print(i, T)
+            print(pd.Series(d) / T * 1000)
+            # print((pd.Series(d) / T * 1000).describe()) # timestamp is in ms?
+
 
 def kafka_consume():
     for msg in consumer:
@@ -48,7 +106,7 @@ def websocket_to_kafka():
             "action": "/api/v1/private/subscribe",
             "arguments": {
                 "instrument": ["all"],
-                "event": ["order_book"]
+                "event": ["order_book", "trade"]
             }
         }
         data['sig'] = client.generate_signature(data['action'], data['arguments'])
@@ -69,7 +127,11 @@ def test_kafka():
 
 a = None
 
-def test_websocket(start=False, instrument="all", event="order_book"):
+# subscribe just gives the full order stack anyway ... it is not incremental. convenient but chatty
+def test_websocket(start=False, instrument="all", event=["order_book", "trade"]):
+    # example: ws = lib.test_websocket(instrument='BTC-29DEC17-17000-P')
+    if type(event) is str:
+        event = [event]
     def on_message(ws, message):
         global a
         a = message
@@ -87,7 +149,13 @@ def test_websocket(start=False, instrument="all", event="order_book"):
             "action": "/api/v1/private/subscribe",
             "arguments": {
                 "instrument": [instrument],
-                "event": [event]
+                "event": event
+                # "event": ["order_book", "trade", "user_order"] // events to be reported, possible events:
+                #                                       // "order_book" -- order book change
+                #                                       // "trade" -- trade notification
+                #                                       // "announcements" -- announcements (list of new announcements titles is send)
+                #                                       // "user_order" -- change of user orders (openning, cancelling, filling)
+                #                                       // "my_trade" -- filtered trade notification, only trades of the
             }
         }
         data['sig'] = client.generate_signature(data['action'], data['arguments'])
