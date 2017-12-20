@@ -1,4 +1,5 @@
 from functools import lru_cache
+import time
 import pandas as pd
 import datetime
 import json
@@ -23,9 +24,27 @@ try:
     topic = 'dbitsub'
     consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
 except Exception as e:
+    consumer = None
     print(e)
 
 from collections import defaultdict
+
+# 0. start kafka
+# 1. websocket_to_kafka
+
+def kafka_consume(minutes_back=None, consumer=consumer):
+    if minutes_back is not None:
+        seekbackminutes(minutes_back, consumer=consumer)
+    for i in range(10):
+        # msg in consumer:
+        msg = consumer.__next__()
+        print(msg.topic, datetime.datetime.fromtimestamp(msg.timestamp / 1000), msg.offset, msg.partition) # msg.value
+
+def howtogetoffsetsmaybe(minutes, consumer=consumer):
+    t = datetime.datetime.today() - datetime.timedelta(minutes=minutes)
+    consumer.partitions_for_topic('dbitsub')
+    tp = TopicPartition('dbitsub', 0)
+    return consumer.offsets_for_times({tp: t.timestamp() * 1000})
 
 def seekbackminutes(offset_minutes, consumer=consumer):
     t = datetime.datetime.today() - datetime.timedelta(minutes=offset_minutes)
@@ -33,8 +52,12 @@ def seekbackminutes(offset_minutes, consumer=consumer):
     assert len(part) == 1
     part = part.pop() # take first expect only one
     tp = TopicPartition('dbitsub', part)
+    consumer.unsubscribe() # you need this first
+    consumer.assign([tp])
     offset = consumer.offsets_for_times({tp: t.timestamp() * 1000})
     print('seeking {} {}'.format(tp, offset[tp]))
+    if offset[tp] is None:
+        print('probably no data there')
     consumer.seek(tp, offset[tp].offset)
 
 def count_eventtypes(consumer=consumer, offset_minutes=5):
@@ -78,16 +101,6 @@ def count_events(consumer=consumer, offset_minutes=5):
             print(pd.Series(d) / T * 1000)
             # print((pd.Series(d) / T * 1000).describe()) # timestamp is in ms?
 
-
-def kafka_consume():
-    for msg in consumer:
-        print(msg.topic, msg.timestamp, msg.offset, msg.partition) # msg.value
-
-def howtogetoffsetsmaybe():
-    t = datetime.datetime.today() - datetime.timedelta(days=0.5)
-    consumer.partitions_for_topic('dbitsub')
-    tp = TopicPartition('dbitsub', 0)
-    consumer.offsets_for_times({tp: t.timestamp() * 1000})
 
 def websocket_to_kafka():
     def on_message(ws, message):
