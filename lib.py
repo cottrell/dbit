@@ -22,6 +22,9 @@ from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 try:
     producer = KafkaProducer(value_serializer=lambda v: json.dumps(v).encode('utf-8'))
     topic = 'dbitsub'
+    # http://kafka-python.readthedocs.io/en/master/usage.html
+    # doesn't work when group_id is specified dunno yet
+    # consumer = KafkaConsumer(topic, group_id='my-group', auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
     consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
 except Exception as e:
     consumer = None
@@ -29,8 +32,11 @@ except Exception as e:
 
 from collections import defaultdict
 
+# TODO kafka commit
+
 # 0. start kafka
 # 1. websocket_to_kafka
+# 2. kafka_consume(1) # to see a bit
 
 def kafka_consume(minutes_back=None, consumer=consumer):
     if minutes_back is not None:
@@ -39,6 +45,8 @@ def kafka_consume(minutes_back=None, consumer=consumer):
         # msg in consumer:
         msg = consumer.__next__()
         print(msg.topic, datetime.datetime.fromtimestamp(msg.timestamp / 1000), msg.offset, msg.partition) # msg.value
+    last_msg = msg
+    return last_msg
 
 def howtogetoffsetsmaybe(minutes, consumer=consumer):
     t = datetime.datetime.today() - datetime.timedelta(minutes=minutes)
