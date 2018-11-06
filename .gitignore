@@ -7,3 +7,5 @@ data/*
 *.db
 *.cfg
 *.log
+.DS_Store
+.*.sw*
