@@ -28,6 +28,7 @@ try:
     consumer = KafkaConsumer(topic, group_id=None, auto_offset_reset='earliest', value_deserializer=lambda v: json.loads(v.decode('utf-8')))
 except Exception as e:
     consumer = None
+    print('possibly ok')
     print(e)
 
 from collections import defaultdict

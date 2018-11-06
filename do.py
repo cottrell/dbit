@@ -235,3 +235,6 @@ data = Data()
 #  'cancelall',
 #  'edit',
 #  'sell',
+
+if __name__ == '__main__':
+    take_snapshot_write_file()
