@@ -11,6 +11,8 @@ import os
 from lib import client
 _mydir = os.path.dirname(os.path.realpath(__file__))
 _data_dir = os.path.join(_mydir, 'data')
+if not os.path.exists(_data_dir):
+    os.makedirs(_data_dir)
 
 safe_commands = [
     # meta
@@ -235,3 +237,6 @@ data = Data()
 #  'cancelall',
 #  'edit',
 #  'sell',
+
+if __name__ == '__main__':
+    take_snapshot_write_file()

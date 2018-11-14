@@ -16,8 +16,7 @@ import os
 import websocket # pip install websocket-client not websocket
 import deribit_api as da
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
-from pylab import *
-ion()
+from scipy.interpolate import PPoly
 
 cred = _json.load(open(os.path.expanduser('~/.cred/deribit/deribit.json')))
 test_url = 'https://test.deribit.com'
@@ -198,7 +197,6 @@ def example_order_book_event():
   'success': True,
   'testnet': False}]
 
-from scipy.interpolate import PPoly
 def get_piecewise_price_vs_size_from_orderbook_entry(orders, mean=True):
     """ orders is just asks or just orders. takes maybe 300 micros though timeit reports much less """
     if not orders:
@@ -217,6 +215,8 @@ def get_piecewise_price_vs_size_from_orderbook_entry(orders, mean=True):
         return F
 
 def plot_order_book_event(result, fig=None):
+    from pylab import plot, fig, linspace
+    ion()
     # HERE HERE and then do backend + webviz
     asks = result['asks']
     # empty list means order book is empty or something else is wrong
@@ -335,7 +335,11 @@ class ConsumerHelper():
 try:
     consumer
 except Exception as e:
-    consumer = ConsumerHelper()
+    try:
+        consumer = ConsumerHelper()
+    except Exception as e:
+        print('possibly ok')
+        print(e)
 
 def seekbackminutes(offset_minutes, consumer):
     t = datetime.datetime.today() - datetime.timedelta(minutes=offset_minutes)

@@ -10,10 +10,19 @@ RUN rm ./Miniconda3-latest-Linux-x86_64.sh
 
 ADD VERSION .
 
-# RUN python3 -m ensurepip && \
-#     rm -rf /usr/lib/python*/ensurepip && \
-#     pip3 install --upgrade pip setuptools && \
-#     if [ ! -e /usr/bin/pip ]; then ln -s pip3 /usr/bin/pip ; fi && \
-#     if [[ ! -e /usr/bin/python ]]; then ln -sf /usr/bin/python3 /usr/bin/python; fi && \
-#     rm -r /root/.cache
+RUN python -m ensurepip && \
+    rm -rf /usr/lib/python*/ensurepip && \
+    pip install --upgrade pip setuptools && \
+    rm -r /root/.cache
+
+RUN pip install numpy pandas
+RUN pip install websocket-client python-rapidjson kafka-python
+RUN pip install https://github.com/deribit/deribit-api-python/archive/master.zip
+COPY do.py /root/
+COPY lib.py /root/
+WORKDIR /root
+# RUN apt-get install -y git
+# RUN pip install git+https://github.com/deribit/deribit-api-python.git
 # RUN pip install pandas --no-build-isolation
+
+# TODO docker secrets for .cred

@@ -1,2 +1,2 @@
 #!/bin/sh
-docker run -it deribit-python /bin/bash
+docker run -it cottrell/deribit-python:latest /bin/bash
