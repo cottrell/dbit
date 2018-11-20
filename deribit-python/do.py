@@ -36,7 +36,7 @@ safe_commands = [
 def snapshot():
     curr = lib.getcurrencies()
     instr = lib.getinstruments()
-    instrumentNames = [x['instrumentName'] for x in instr]
+    instrumentNames = np.random.permutation([x['instrumentName'] for x in instr])
     orderbook = dict()
     lasttrades = dict()
     summary = dict()
