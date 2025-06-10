@@ -1,3 +1,7 @@
+# 2025-05-30
+
+See new location in gym
+
 # Latest
 
 Dockerizing. Dunno why.
